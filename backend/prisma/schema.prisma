@@ -1,0 +1,419 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MEMBER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  LATE
+}
+
+enum CompetitionStatus {
+  UPCOMING
+  REGISTRATION_OPEN
+  REGISTRATION_CLOSED
+  ACTIVE
+  ENDED
+}
+
+enum RegistrationStatus {
+  REGISTERED
+  WAITLISTED
+  CANCELLED
+}
+
+enum RequirementType {
+  POINTS_TOTAL
+  SESSIONS_COMPLETED
+  ASSIGNMENT_SCORE
+  PROJECT_SUBMITTED
+  COMPETITION_WIN
+  MANUAL
+}
+
+enum TransactionType {
+  EARNED
+  SPENT
+  PENALTY
+  ADJUSTMENT
+}
+
+enum NotificationType {
+  SYSTEM
+  ACHIEVEMENT
+  REVIEW
+  COMPETITION
+  REMINDER
+}
+
+model User {
+  id                String     @id @default(auto()) @map("_id") @db.ObjectId
+  username          String     @unique
+  email             String     @unique
+  passwordHash      String
+  role              Role       @default(MEMBER)
+  status            UserStatus @default(ACTIVE)
+  avatar            String?
+  fullName          String?
+  bio               String?
+  emailVerified     Boolean    @default(false)
+  lastLoginAt       DateTime?
+  passwordChangedAt DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  sessionProgress         SessionProgress[]
+  assignmentSubmissions   AssignmentSubmission[]
+  projectProgress         ProjectProgress[]
+  projectSubmissions      ProjectSubmission[]
+  competitionRegistrations CompetitionRegistration[]
+  competitionSubmissions  CompetitionSubmission[]
+  badges                  UserBadge[]
+  pointTransactions       PointTransaction[]
+  notifications           Notification[]
+  auditLogs               AuditLog[]
+}
+
+model Semester {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String?
+  order       Int           @unique
+  status      ContentStatus @default(DRAFT)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  weeks Week[]
+}
+
+model Week {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  semesterId  String        @db.ObjectId
+  title       String
+  description String?
+  order       Int
+  status      ContentStatus @default(DRAFT)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  semester Semester  @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  sessions Session[]
+
+  @@unique([semesterId, order])
+}
+
+model Session {
+  id               String        @id @default(auto()) @map("_id") @db.ObjectId
+  weekId           String        @db.ObjectId
+  title            String
+  slug             String        @unique
+  description      String?
+  content          String?
+  order            Int
+  status           ContentStatus @default(DRAFT)
+  estimatedMinutes Int?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  week        Week              @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  progress    SessionProgress[]
+  assignments Assignment[]
+
+  @@unique([weekId, order])
+}
+
+model SessionProgress {
+  id          String         @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String         @db.ObjectId
+  sessionId   String         @db.ObjectId
+  progress    Int            @default(0)
+  status      ProgressStatus @default(NOT_STARTED)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sessionId])
+}
+
+model Assignment {
+  id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId    String        @db.ObjectId
+  title        String
+  slug         String        @unique
+  description  String?
+  instructions String?
+  status       ContentStatus @default(DRAFT)
+  difficulty   Int           @default(1)
+  deadline     DateTime?
+  maxAttempts  Int?
+  rewardRuleId String?       @db.ObjectId
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  session     Session                @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  submissions AssignmentSubmission[]
+}
+
+model AssignmentSubmission {
+  id           String           @id @default(auto()) @map("_id") @db.ObjectId
+  assignmentId String           @db.ObjectId
+  userId       String           @db.ObjectId
+  content      String
+  status       SubmissionStatus @default(SUBMITTED)
+  attemptNumber Int             @default(1)
+  submittedAt  DateTime         @default(now())
+  reviewedAt   DateTime?
+  reviewedBy   String?          @db.ObjectId
+  feedback     String?
+  score        Int?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, userId, attemptNumber])
+}
+
+model Project {
+  id            String        @id @default(auto()) @map("_id") @db.ObjectId
+  title         String
+  slug          String        @unique
+  description   String?
+  requirements  String?
+  difficulty    Int           @default(1)
+  status        ContentStatus @default(DRAFT)
+  deadline      DateTime?
+  technologies  String[]
+  repositoryUrl String?
+  demoUrl       String?
+  rewardRuleId  String?       @db.ObjectId
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  progress    ProjectProgress[]
+  submissions ProjectSubmission[]
+}
+
+model ProjectProgress {
+  id          String         @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String         @db.ObjectId
+  projectId   String         @db.ObjectId
+  progress    Int            @default(0)
+  status      ProgressStatus @default(NOT_STARTED)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+}
+
+model ProjectSubmission {
+  id            String           @id @default(auto()) @map("_id") @db.ObjectId
+  projectId     String           @db.ObjectId
+  userId        String           @db.ObjectId
+  content       String?
+  status        SubmissionStatus @default(SUBMITTED)
+  repositoryUrl String?
+  demoUrl       String?
+  score         Int?
+  feedback      String?
+  submittedAt   DateTime         @default(now())
+  reviewedAt    DateTime?
+  reviewedBy    String?          @db.ObjectId
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+}
+
+model Competition {
+  id                  String            @id @default(auto()) @map("_id") @db.ObjectId
+  title               String
+  slug                String            @unique
+  description         String?
+  rules               String?
+  status              CompetitionStatus @default(UPCOMING)
+  registrationStartAt DateTime?
+  registrationEndAt   DateTime?
+  startAt             DateTime?
+  submissionEndAt     DateTime?
+  capacity            Int?
+  eligibilityRules    Json?
+  rewardRuleId        String?           @db.ObjectId
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  registrations CompetitionRegistration[]
+  submissions   CompetitionSubmission[]
+}
+
+model CompetitionRegistration {
+  id            String             @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String             @db.ObjectId
+  competitionId String             @db.ObjectId
+  status        RegistrationStatus @default(REGISTERED)
+  registeredAt  DateTime           @default(now())
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, competitionId])
+}
+
+model CompetitionSubmission {
+  id            String           @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String           @db.ObjectId
+  competitionId String           @db.ObjectId
+  content       String?
+  status        SubmissionStatus @default(SUBMITTED)
+  score         Int?
+  feedback      String?
+  repositoryUrl String?
+  demoUrl       String?
+  submittedAt   DateTime         @default(now())
+  reviewedAt    DateTime?
+  reviewedBy    String?          @db.ObjectId
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  competition Competition @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, competitionId])
+}
+
+model Badge {
+  id                String          @id @default(auto()) @map("_id") @db.ObjectId
+  name              String
+  slug              String          @unique
+  description       String?
+  icon              String?
+  status            ContentStatus   @default(DRAFT)
+  requirementType   RequirementType
+  requirementConfig Json?
+  rewardRuleId      String?         @db.ObjectId
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  userBadges UserBadge[]
+}
+
+model UserBadge {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  badgeId   String   @db.ObjectId
+  earnedAt  DateTime @default(now())
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+}
+
+model RewardRule {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  points      Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PointTransaction {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String          @db.ObjectId
+  amount          Int
+  type            TransactionType @default(EARNED)
+  sourceId        String?         @db.ObjectId
+  sourceType      String?
+  description     String?
+  createdAt       DateTime        @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model File {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  uploaderId   String   @db.ObjectId
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  url          String
+  createdAt    DateTime @default(now())
+}
+
+model Notification {
+  id        String           @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String           @db.ObjectId
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String?  @db.ObjectId
+  action     String
+  entityType String
+  entityId   String
+  changes    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}

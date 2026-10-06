@@ -1,0 +1,6 @@
+allowBuilds:
+  '@prisma/client': false
+  '@prisma/engines': false
+  argon2: true
+  mongodb-memory-server: true
+  prisma: false

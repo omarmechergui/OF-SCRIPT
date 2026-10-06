@@ -1,0 +1,25 @@
+{
+  "name": "offscript",
+  "version": "1.0.0",
+  "description": "OFFSCRIPT Platform",
+  "scripts": {
+    "install:all": "pnpm install && cd frontend && pnpm install && cd ../backend && pnpm install",
+    "dev:frontend": "cd frontend && pnpm run dev",
+    "dev:backend": "cd backend && pnpm run dev",
+    "dev": "npx concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\"",
+    "build:frontend": "cd frontend && pnpm run build",
+    "build:backend": "cd backend && pnpm run build",
+    "build": "pnpm run build:backend && pnpm run build:frontend",
+    "lint:frontend": "cd frontend && pnpm run lint",
+    "lint:backend": "cd backend && pnpm run lint",
+    "lint": "pnpm run lint:backend && pnpm run lint:frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
